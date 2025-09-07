@@ -4,7 +4,7 @@ import numpy as np
 import pyautogui
 
 # ------------------------- Modes -------------------------
-from modes import slides, volume, canvas, keyboard
+from modes import slides, volume, canvas, keyboard, mouse
 
 # ------------------------- MediaPipe -------------------------
 mp_hands = mp.solutions.hands
@@ -16,11 +16,11 @@ hands = mp_hands.Hands(
 
 # ------------------------- Camera -------------------------
 cap = cv2.VideoCapture(0)
-cap.set(3, 960)
-cap.set(4, 720)
+cap.set(3, 1280)  # width
+cap.set(4, 960)   # height
 
 # ------------------------- Mode management -------------------------
-MODES = ["SLIDES", "VOLUME", "CANVAS", "KEYBOARD"]
+MODES = ["SLIDES", "VOLUME", "CANVAS", "KEYBOARD", "MOUSE"]
 mode = "SLIDES"
 last_action = ""
 
@@ -65,6 +65,10 @@ while True:
     elif mode == "KEYBOARD":
         frame, last_action = keyboard.run(frame, results, last_action)
 
+    elif mode == "MOUSE":
+        frame = mouse.run(frame, results)
+        last_action = "Virtual Mouse Active"
+
     # ------------------------- Display -------------------------
     cv2.putText(frame, f"Mode: {mode}", (20, 50),
                 cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 180), 2)
@@ -84,8 +88,9 @@ while True:
     elif key == ord('3'):
         mode = "CANVAS"; last_action = "Switched to CANVAS"
     elif key == ord('4'):
-        mode = "KEYBOARD"
-        last_action = "Switched to KEYBOARD"
+        mode = "KEYBOARD"; last_action = "Switched to KEYBOARD"
+    elif key == ord('5'):
+        mode = "MOUSE"; last_action = "Switched to MOUSE"
     elif key == ord('x') and mode == "CANVAS":
         if canvas_frame is not None:
             canvas_frame[:] = 255

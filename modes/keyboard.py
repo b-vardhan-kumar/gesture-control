@@ -1,6 +1,7 @@
 import cv2
 import time
 import pyautogui
+import numpy as np
 
 # ---------------- Keyboard Layout ----------------
 KEYS = [
@@ -11,11 +12,12 @@ KEYS = [
 
 KEY_ROWS = len(KEYS)
 MAX_COLS = max(len(r) for r in KEYS)
-KEY_SIZE = (60, 60)  # width, height
-KEY_SPACING = 10
+KEY_SIZE = (80, 80)  # width, height (increased)
+KEY_SPACING = 15      # spacing between keys
 TOP_LEFT = (50, 200)  # starting position of the keyboard
-HOVER_TIME = 0.5  # seconds for key press
+HOVER_TIME = 0.5      # seconds to trigger key press
 
+# Hover tracking
 hover_start_time = None
 hovered_key = None
 
@@ -24,39 +26,51 @@ typed_text = ""
 
 # ---------------- Helper Functions ----------------
 def draw_keyboard(frame, highlight_key=None):
-    """Draw the keyboard layout and highlight hovered/pressed key"""
+    """Draw the keyboard layout with optional highlighted key"""
+    overlay = frame.copy()
+    
+    # Draw keys
     for row_idx, row in enumerate(KEYS):
         for col_idx, key in enumerate(row):
-            x = TOP_LEFT[0] + col_idx*(KEY_SIZE[0]+KEY_SPACING)
-            y = TOP_LEFT[1] + row_idx*(KEY_SIZE[1]+KEY_SPACING)
+            x = TOP_LEFT[0] + col_idx * (KEY_SIZE[0] + KEY_SPACING)
+            y = TOP_LEFT[1] + row_idx * (KEY_SIZE[1] + KEY_SPACING)
 
-            color = (200,200,200)
+            # Transparent key base
+            base_color = (200, 200, 200)
+            alpha = 0.5  # transparency
+            cv2.rectangle(overlay, (x, y), (x + KEY_SIZE[0], y + KEY_SIZE[1]), base_color, -1)
+
+            # Highlight key
             if highlight_key == key:
-                color = (0,200,0)  # highlight in green
+                cv2.rectangle(overlay, (x, y), (x + KEY_SIZE[0], y + KEY_SIZE[1]), (0, 200, 0), -1)
 
-            cv2.rectangle(frame, (x,y), (x+KEY_SIZE[0], y+KEY_SIZE[1]), color, -1)
-            cv2.rectangle(frame, (x,y), (x+KEY_SIZE[0], y+KEY_SIZE[1]), (0,0,0), 2)
-            cv2.putText(frame, key, (x+15, y+40), cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)
+            # Key borders
+            cv2.rectangle(overlay, (x, y), (x + KEY_SIZE[0], y + KEY_SIZE[1]), (0, 0, 0), 2)
+            
+            # Key text
+            cv2.putText(overlay, key, (x + 20, y + 50), cv2.FONT_HERSHEY_SIMPLEX, 1.5, (0, 0, 0), 3)
+
+    # Overlay the transparent keys onto the frame
+    cv2.addWeighted(overlay, alpha, frame, 1 - alpha, 0, frame)
 
     # Draw typed text box
-    cv2.rectangle(frame, (TOP_LEFT[0], TOP_LEFT[1]-80), 
-                  (TOP_LEFT[0]+MAX_COLS*(KEY_SIZE[0]+KEY_SPACING)-KEY_SPACING, TOP_LEFT[1]-20),
-                  (255,255,255), -1)
-    cv2.rectangle(frame, (TOP_LEFT[0], TOP_LEFT[1]-80), 
-                  (TOP_LEFT[0]+MAX_COLS*(KEY_SIZE[0]+KEY_SPACING)-KEY_SPACING, TOP_LEFT[1]-20),
-                  (0,0,0), 2)
-    cv2.putText(frame, typed_text, (TOP_LEFT[0]+10, TOP_LEFT[1]-30),
-                cv2.FONT_HERSHEY_SIMPLEX, 1, (0,0,0), 2)
+    text_box_width = MAX_COLS * (KEY_SIZE[0] + KEY_SPACING) - KEY_SPACING
+    cv2.rectangle(frame, (TOP_LEFT[0], TOP_LEFT[1] - 100),
+                  (TOP_LEFT[0] + text_box_width, TOP_LEFT[1] - 20), (255, 255, 255), -1)
+    cv2.rectangle(frame, (TOP_LEFT[0], TOP_LEFT[1] - 100),
+                  (TOP_LEFT[0] + text_box_width, TOP_LEFT[1] - 20), (0, 0, 0), 2)
+    cv2.putText(frame, typed_text, (TOP_LEFT[0] + 10, TOP_LEFT[1] - 45),
+                cv2.FONT_HERSHEY_SIMPLEX, 1.2, (0, 0, 0), 2)
 
     return frame
 
 def get_hovered_key(ix, iy):
-    """Return key that the fingertip is hovering over"""
+    """Return the key that the fingertip is currently hovering over"""
     for row_idx, row in enumerate(KEYS):
         for col_idx, key in enumerate(row):
-            x = TOP_LEFT[0] + col_idx*(KEY_SIZE[0]+KEY_SPACING)
-            y = TOP_LEFT[1] + row_idx*(KEY_SIZE[1]+KEY_SPACING)
-            if x <= ix <= x+KEY_SIZE[0] and y <= iy <= y+KEY_SIZE[1]:
+            x = TOP_LEFT[0] + col_idx * (KEY_SIZE[0] + KEY_SPACING)
+            y = TOP_LEFT[1] + row_idx * (KEY_SIZE[1] + KEY_SPACING)
+            if x <= ix <= x + KEY_SIZE[0] and y <= iy <= y + KEY_SIZE[1]:
                 return key
     return None
 
@@ -78,7 +92,8 @@ def run(frame, results, last_action):
                 hover_start_time = time.time()
                 hovered_key = key
             else:
-                if hover_start_time and (time.time()-hover_start_time) >= HOVER_TIME:
+                if hover_start_time and (time.time() - hover_start_time) >= HOVER_TIME:
+                    # Press the key
                     if key == "<":
                         typed_text = typed_text[:-1]
                         pyautogui.press("backspace")
@@ -87,7 +102,6 @@ def run(frame, results, last_action):
                         typed_text += key
                         pyautogui.press(key.lower())
                         last_action = f"Key: {key}"
-
                     hover_start_time = None
                     hovered_key = None
         else:
@@ -95,8 +109,8 @@ def run(frame, results, last_action):
             hovered_key = None
 
         # Draw fingertip pointer
-        cv2.circle(frame, (ix, iy), 10, (0,0,255), -1)
+        cv2.circle(frame, (ix, iy), 15, (0, 0, 255), -1)
 
-    # Draw keyboard and typed text
+    # Draw the keyboard and typed text
     frame = draw_keyboard(frame, highlight_key)
     return frame, last_action
