@@ -4,7 +4,7 @@ import numpy as np
 import pyautogui
 
 # ------------------------- Modes -------------------------
-from modes import slides, volume, canvas
+from modes import slides, volume, canvas, keyboard
 
 # ------------------------- MediaPipe -------------------------
 mp_hands = mp.solutions.hands
@@ -20,7 +20,7 @@ cap.set(3, 960)
 cap.set(4, 720)
 
 # ------------------------- Mode management -------------------------
-MODES = ["SLIDES", "VOLUME", "CANVAS"]
+MODES = ["SLIDES", "VOLUME", "CANVAS", "KEYBOARD"]
 mode = "SLIDES"
 last_action = ""
 
@@ -61,6 +61,9 @@ while True:
         if canvas_frame is None:
             canvas_frame = 255 * np.ones_like(frame)
         frame, canvas_frame, last_action = canvas.run(frame, canvas_frame, results, last_action)
+        
+    elif mode == "KEYBOARD":
+        frame, last_action = keyboard.run(frame, results, last_action)
 
     # ------------------------- Display -------------------------
     cv2.putText(frame, f"Mode: {mode}", (20, 50),
@@ -80,6 +83,9 @@ while True:
         mode = "VOLUME"; last_action = "Switched to VOLUME"
     elif key == ord('3'):
         mode = "CANVAS"; last_action = "Switched to CANVAS"
+    elif key == ord('4'):
+        mode = "KEYBOARD"
+        last_action = "Switched to KEYBOARD"
     elif key == ord('x') and mode == "CANVAS":
         if canvas_frame is not None:
             canvas_frame[:] = 255
