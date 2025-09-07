@@ -1,50 +1,47 @@
 import cv2
-import math
 import numpy as np
+import math
 
-# Optional Pycaw support
-PYCAW_OK = True
-try:
-    from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
-    from comtypes import CLSCTX_ALL
-    devices = AudioUtilities.GetSpeakers()
-    interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
-    volume = interface.QueryInterface(IAudioEndpointVolume)
-    VMIN, VMAX, _ = volume.GetVolumeRange()
-except Exception:
-    PYCAW_OK = False
-    volume = None
-    VMIN, VMAX = 0, 100
+# Volume control module
+# Uses thumb + index finger pinch distance to control system volume
+# You can integrate with pycaw for Windows volume or just show value for now
 
-def thumb_index_distance(lms, w, h):
-    x1, y1 = int(lms[4].x * w), int(lms[4].y * h)
-    x2, y2 = int(lms[8].x * w), int(lms[8].y * h)
-    d = math.hypot(x2 - x1, y2 - y1)
-    return d
-
-def set_volume(dist, d_min=20, d_max=220):
-    dist = np.clip(dist, d_min, d_max)
-    pct = int(np.interp(dist, [d_min, d_max], [0, 100]))
-    if PYCAW_OK and volume is not None:
-        db = np.interp(dist, [d_min, d_max], [VMIN, VMAX])
-        try:
-            volume.SetMasterVolumeLevel(db, None)
-        except:
-            pass
-    return pct
-
-def run(frame, results, last_action):
+def run(frame, results, last_action, volume_ctrl=None):
+    """
+    Adjust system volume using hand pinch gesture.
+    Thumb tip (4) and Index tip (8) distance -> volume level.
+    """
     h, w = frame.shape[:2]
-    if results.multi_hand_landmarks:
-        lms = results.multi_hand_landmarks[0].landmark
-        dist = thumb_index_distance(lms, w, h)
-        pct = set_volume(dist)
-        last_action = f"Volume: {pct}%"
 
-        # Draw visuals
-        x1, y1 = int(lms[4].x*w), int(lms[4].y*h)
-        x2, y2 = int(lms[8].x*w), int(lms[8].y*h)
-        cv2.circle(frame, (x1, y1), 10, (255, 0, 0), -1)
-        cv2.circle(frame, (x2, y2), 10, (255, 0, 0), -1)
-        cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 255), 3)
+    if results and results.multi_hand_landmarks:
+        hand_lms = results.multi_hand_landmarks[0]  # get first hand
+        lm = hand_lms.landmark
+
+        # Thumb tip (4), Index tip (8)
+        x1, y1 = int(lm[4].x * w), int(lm[4].y * h)
+        x2, y2 = int(lm[8].x * w), int(lm[8].y * h)
+
+        # Draw circles on tips
+        cv2.circle(frame, (x1, y1), 8, (255, 0, 255), cv2.FILLED)
+        cv2.circle(frame, (x2, y2), 8, (255, 0, 255), cv2.FILLED)
+        cv2.line(frame, (x1, y1), (x2, y2), (255, 0, 255), 2)
+
+        # Distance between points
+        length = math.hypot(x2 - x1, y2 - y1)
+
+        # Map length to volume [0, 100]
+        vol = np.interp(length, [20, 200], [0, 100])
+
+        if volume_ctrl:  # if pycaw or similar object is passed
+            volume_ctrl.SetMasterVolumeLevelScalar(vol / 100, None)
+
+        last_action = f"Volume: {int(vol)}%"
+
+        # Draw volume bar
+        cv2.rectangle(frame, (50, 150), (85, 400), (0, 255, 0), 2)
+        bar = np.interp(vol, [0, 100], [400, 150])
+        cv2.rectangle(frame, (50, int(bar)), (85, 400), (0, 255, 0), cv2.FILLED)
+        cv2.putText(frame, f'{int(vol)} %', (40, 430),
+                    cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0), 2)
+
     return frame, last_action
